@@ -159,7 +159,6 @@ class _ConverterPageState extends State<ConverterPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.cleaning_services_outlined, size: 80, color: Colors.orange),
               const SizedBox(height: 20),
               const Text(
                 "maze map japanizer",
@@ -167,7 +166,7 @@ class _ConverterPageState extends State<ConverterPage> {
               ),
               const SizedBox(height: 10),
               const Text(
-                "以下を自動化します \n jsonのリーグタイプを変更 \n 壁の被災者を削除 \n 青タイルを緑の床被災者に \n 赤タイルを赤被災者に",
+                "青タイル→緑被災者 \n 赤タイル→赤被災者",
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16, height: 1.5),
               ),

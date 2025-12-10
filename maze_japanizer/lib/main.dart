@@ -75,7 +75,6 @@ class _ConverterPageState extends State<ConverterPage> {
               final victims = tile['victims'];
               if (victims['top'] != 'None' || victims['right'] != 'None' || 
                   victims['bottom'] != 'None' || victims['left'] != 'None') {
-                wallVictimsRemoved++;
               }
               
               victims['top'] = 'None';
@@ -168,7 +167,7 @@ class _ConverterPageState extends State<ConverterPage> {
               ),
               const SizedBox(height: 10),
               const Text(
-                "・League Type → Entry\n・壁の被災者 → 削除 (None)\n・Color Tile → Floor Victim",
+                "以下を自動化します \n jsonのリーグタイプを変更 \n 壁の被災者を削除 \n 青タイルを緑の床被災者に \n 赤タイルを赤被災者に",
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16, height: 1.5),
               ),

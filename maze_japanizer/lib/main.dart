@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:html' as html;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -7,116 +10,214 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'RCJ Map Converter',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const ConverterPage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class ConverterPage extends StatefulWidget {
+  const ConverterPage({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<ConverterPage> createState() => _ConverterPageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _ConverterPageState extends State<ConverterPage> {
+  String? _fileName;
+  String? _statusMessage;
+  Map<String, dynamic>? _processedJson;
+  bool _isProcessing = false;
 
-  void _incrementCounter() {
+  Future<void> _pickAndProcessFile() async {
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _isProcessing = true;
+      _statusMessage = null;
+      _processedJson = null;
     });
+
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        withData: true,
+      );
+
+      if (result != null && result.files.first.bytes != null) {
+        final bytes = result.files.first.bytes!;
+        final name = result.files.first.name;
+        final jsonString = utf8.decode(bytes);
+        final Map<String, dynamic> data = jsonDecode(jsonString);
+
+        // リーグタイプを entry に
+        String oldLeague = data['leagueType'] ?? 'unknown';
+        data['leagueType'] = 'entry'; 
+
+        int blueCount = 0;
+        int redCount = 0;
+
+        if (data.containsKey('cells') && data['cells'] is Map) {
+          final Map<String, dynamic> cells = data['cells'];
+          
+          cells.forEach((key, cellData) {
+            if (cellData['tile'] != null) {
+              final tile = cellData['tile'];
+              _ensureVictimsObj(tile);
+
+              //壁の被災者を削除
+              final victims = tile['victims'];
+              if (victims['top'] != 'None' || victims['right'] != 'None' || 
+                  victims['bottom'] != 'None' || victims['left'] != 'None') {
+                wallVictimsRemoved++;
+              }
+              
+              victims['top'] = 'None';
+              victims['right'] = 'None';
+              victims['bottom'] = 'None';
+              victims['left'] = 'None';
+
+              // 青タイルを緑被災者に
+              if (tile['blue'] == true) {
+                tile['blue'] = false;
+                tile['victims']['floor'] = 'Green';
+                blueCount++;
+              }
+
+              // 赤タイルを赤被災者に
+              if (tile['red'] == true) {
+                tile['red'] = false;
+                tile['victims']['floor'] = 'Red';
+                redCount++;
+              }
+
+              // 坂と階段の処理
+              if ((tile ['ramp'] = true) || (tile['steps'] == true )) {
+                tile['ramp'] = false;
+                tile['steps'] = false;
+              }
+            }
+          });
+        }
+
+        setState(() {
+          _fileName = name;
+          _processedJson = data;
+          _statusMessage = "処理完了！\n"
+                          "リーグ設定: $oldLeague → entry\n"
+                          "青 → 緑被災者: ${blueCount}件\n"
+                          "赤 → 赤被災者: ${redCount}件";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _statusMessage = "エラーが発生しました: $e";
+      });
+    } finally {
+      setState(() {
+        _isProcessing = false;
+      });
+    }
+  }
+
+  void _ensureVictimsObj(Map<String, dynamic> tile) {
+    if (tile['victims'] == null) {
+      tile['victims'] = {
+        "top": "None", "right": "None", "bottom": "None", "left": "None", "floor": "None"
+      };
+    }
+  }
+
+  void _downloadFile() {
+    if (_processedJson == null || _fileName == null) return;
+
+    final jsonString = const JsonEncoder.withIndent('  ').convert(_processedJson);
+    final bytes = utf8.encode(jsonString);
+    final blob = html.Blob([bytes]);
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    
+    html.AnchorElement(href: url)
+      ..setAttribute("download", "entry_$_fileName")
+      ..click();
+    
+    html.Url.revokeObjectUrl(url);
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
+      appBar: AppBar(title: const Text('RCJ Map Converter (Entry)')),
       body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 600),
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.cleaning_services_outlined, size: 80, color: Colors.orange),
+              const SizedBox(height: 20),
+              const Text(
+                "maze map japanizer",
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                "・League Type → Entry\n・壁の被災者 → 削除 (None)\n・Color Tile → Floor Victim",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16, height: 1.5),
+              ),
+              const SizedBox(height: 40),
+              
+              ElevatedButton.icon(
+                onPressed: _isProcessing ? null : _pickAndProcessFile,
+                icon: _isProcessing 
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.upload_file),
+                label: const Text("JSONを選択して変換"),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
+                ),
+              ),
+
+              const SizedBox(height: 30),
+
+              if (_statusMessage != null)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    _statusMessage!,
+                    style: const TextStyle(fontSize: 16),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+
+              const SizedBox(height: 30),
+
+              if (_processedJson != null)
+                FilledButton.icon(
+                  onPressed: _downloadFile,
+                  icon: const Icon(Icons.download),
+                  label: const Text("変換ファイルをダウンロード"),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }

@@ -151,7 +151,8 @@ class _ConverterPageState extends State<ConverterPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('RCJ Map Converter (Entry)')),
+      appBar: AppBar(title: const Text('マップエントリーにするやつ'),
+      backgroundColor: Colors.green,),
       body: Center(
         child: Container(
           constraints: const BoxConstraints(maxWidth: 600),
@@ -161,7 +162,7 @@ class _ConverterPageState extends State<ConverterPage> {
             children: [
               const SizedBox(height: 20),
               const Text(
-                "maze map japanizer",
+                "マップをエントリー用に変換するやつ",
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
